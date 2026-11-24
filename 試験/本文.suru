@@ -1,0 +1,64 @@
+「試験」 を 読み込んで 使う
+「標準」 を 読み込んで 使う
+「JSON」 を 読み込んで 使う
+「Ollama」 を 読み込んで 使う
+
+Ollama通知 を 通知文にする は 文字列
+（s という Ollama断片） を 通知文にする とは 「断片:」 + s
+（s という Ollama考え） を 通知文にする とは 「考え:」 + s
+（群 という Ollama道具呼出） を 通知文にする とは 「道具:」 + （（群 の JSON配列） を JSON文字列にする）
+（語数 は n で 秒 は t で 送語数 は p という Ollama完了） を 通知文にする とは 「完了:」 + （n を 文字列化する） + 「/」 + （t を 文字列化する） + 「/」 + （p を 文字列化する）
+（e という Ollama誤り） を 通知文にする とは 「誤り:」 + e
+x を 通知文にする とは 「無言」
+
+文字列 を 読んだ通知にする は 文字列
+行 を 読んだ通知にする とは 行 を Ollama通知にして 通知文にする
+
+通知試験する は 真偽 の 動作
+通知試験する とは 手順
+  （「{"model":"m","message":{"role":"assistant","content":"こん"},"done":false}」 を 読んだ通知にする） を 「断片:こん」 に 一致確認する
+  （「{"model":"m","message":{"role":"assistant","content":"","thinking":"ふむ"},"done":false}」 を 読んだ通知にする） を 「考え:ふむ」 に 一致確認する
+  （「{"model":"m","message":{"role":"assistant","content":""},"done":true,"eval_count":42,"eval_duration":2000000000,"prompt_eval_count":900}」 を 読んだ通知にする） を 「完了:42/2/900」 に 一致確認する
+  （「{"error":"model \"x\" not found"}」 を 読んだ通知にする） を 「誤り:model "x" not found」 に 一致確認する
+  （「」 を 読んだ通知にする） を 「無言」 に 一致確認する
+  （「{"model":"m","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"run","arguments":{"command":"ls"}}}]},"done":false}」 を 読んだ通知にする） を 「道具:[{"function":{"name":"run","arguments":{"command":"ls"}}}]」 に 一致確認する
+  （「壊れた{」 を 読んだ通知にする） を 「無言」 に 一致確認する
+
+本文試験する は 真偽 の 動作
+本文試験する とは 手順
+  群 とは （「user」 で 「やあ」 を Ollama発言にする） を 空 に 挿入する
+  r とは 「llama3.2」 で 群 を Ollama依頼にする
+  （r を 真 で Ollama要求本文にする） を 「{"model":"llama3.2","messages":[{"role":"user","content":"やあ"}],"stream":true}」 に 一致確認する
+  （r を 偽 で Ollama要求本文にする） を 「{"model":"llama3.2","messages":[{"role":"user","content":"やあ"}],"stream":false}」 に 一致確認する
+  # 指示・options・format・think・道具を付ける
+  指示 とは 「system」 で 「短く」 を Ollama発言にする
+  形 とは （（「type」 と （「object」 の JSON文字列） の JSON項目） を 空 に 挿入する） の JSON物
+  道具 とは 「run」 で 「コマンドを動かす」 を 形 から Ollama道具定義にする
+  d とは 考える は （真 の JSON真偽） で 形式 は 形 で 道具群 は （道具 を 空 に 挿入する） で 発言群 は （（指示 を 空 に 挿入する） + 群） の （r に 「temperature」 を （0.5 の JSON数） で Ollama選択追加する）
+  （d を 真 で Ollama要求本文にする） を 「{"model":"llama3.2","messages":[{"role":"system","content":"短く"},{"role":"user","content":"やあ"}],"stream":true,"tools":[{"type":"function","function":{"name":"run","description":"コマンドを動かす","parameters":{"type":"object"}}}],"options":{"temperature":0.5},"format":{"type":"object"},"think":true}」 に 一致確認する
+
+発言試験する は 真偽 の 動作
+発言試験する とは 手順
+  呼出 とは （「[{"function":{"name":"run","arguments":{"command":"ls"}}}]」 を JSON読取した 結果） を 要素群にする
+  助手 とは 考え は 「ふむ」 で 道具呼出群 は 呼出 の （「assistant」 で 「動かします」 を Ollama発言にする）
+  （助手 を Ollama発言JSONにして JSON文字列にする） を 「{"role":"assistant","content":"動かします","thinking":"ふむ","tool_calls":[{"function":{"name":"run","arguments":{"command":"ls"}}}]}」 に 一致確認する
+  返 とは 「run」 で 「a.txt」 を Ollama道具返答にする
+  （返 を Ollama発言JSONにして JSON文字列にする） を 「{"role":"tool","content":"a.txt","tool_name":"run"}」 に 一致確認する
+  （呼出 の 先頭 を Ollama道具名取得する） を 「run」 に 一致確認する
+  （（呼出 の 先頭 を Ollama道具引数取得する） から 「command」 を Ollama文字値取得する） を 「ls」 に 一致確認する
+  （（「{"a":3}」 を JSON読取した 結果） から 「a」 を Ollama数値取得する） を 3 に 一致確認する
+
+JSON を 要素群にする は JSON の リスト
+（群 という JSON配列） を 要素群にする とは 群
+v を 要素群にする とは 空
+
+パラメータ試験する は 真偽 の 動作
+パラメータ試験する とは 手順
+  （「7.6B」 を Ollamaパラメータ数にする） を 7.6 に 一致確認する
+  （「494M」 を Ollamaパラメータ数にする） を 0.494 に 一致確認する
+  （「1.2T」 を Ollamaパラメータ数にする） を 1200 に 一致確認する
+  （「70b」 を Ollamaパラメータ数にする） を 70 に 一致確認する
+  （「8」 を Ollamaパラメータ数にする） を 8 に 一致確認する
+  （「」 を Ollamaパラメータ数にする） を 0 に 一致確認する
+  （「なに」 を Ollamaパラメータ数にする） を 0 に 一致確認する
+  （「B」 を Ollamaパラメータ数にする） を 0 に 一致確認する
