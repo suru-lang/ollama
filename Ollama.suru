@@ -20,7 +20,7 @@
 #
 #   チャット(POST /api/chat):
 #   w で 依頼 を 初め から 受け方 に Ollamaチャット流する … 届いた1行ごとに Ollama通知 にして 受け方 を呼び、状態をたたみ込む
-#   w で 依頼 を Ollamaチャットする              … 流さずに、答え(Ollama答え: 発言 と 語数・秒・送語数)
+#   w で 依頼 を Ollamaチャットする              … 流さずに、答え(Ollama答え: 答発言 と 語数・秒・送語数)
 #   依頼 を 流す で Ollama要求本文にする         … 送る本文(JSON の文字列)。流す は 真偽
 #   行 を Ollama通知にする                      … /api/chat から届いた1行を、断片・考え・道具呼出・完了・誤り・無言 に分ける
 #   発言 を Ollama発言JSONにする                … 発言の JSON
@@ -51,7 +51,7 @@ Ollama発言 とは 役 と 内容 と 考え と 道具呼出群 と 道具名 
 Ollama依頼 とは モデル と 発言群 と 道具群 と 選択群 と 形式 と 考える の 組
 
 # 流さないチャットの答え。語数 は答えのトークンの数、秒 は答えを作るのにかかった秒、送語数 は送った発言のトークンの数
-Ollama答え とは 発言 と 語数 と 秒 と 送語数 の 組
+Ollama答え とは 答発言 と 語数 と 秒 と 送語数 の 組
 
 # /api/chat から届く1行の中身
 #   Ollama断片 … 答えの続き。Ollama考え … 考えている途中の文(考えるモデルのとき)
@@ -182,7 +182,7 @@ j を 完了読取する とは 語数 は （j から 「eval_count」 を Olla
 
 # 流さない答え {"message":{…},"done":true,"eval_count":…}
 JSON を 答え読取する は Ollama答え
-j を 答え読取する とは 発言 は 発言 で 語数 は （j から 「eval_count」 を Ollama数値取得する） で 秒 は （j から 「eval_duration」 を Ollama数値取得する） / 1000000000 で 送語数 は （j から 「prompt_eval_count」 を Ollama数値取得する） の Ollama答え
+j を 答え読取する とは 答発言 は 発言 で 語数 は （j から 「eval_count」 を Ollama数値取得する） で 秒 は （j から 「eval_duration」 を Ollama数値取得する） / 1000000000 で 送語数 は （j から 「prompt_eval_count」 を Ollama数値取得する） の Ollama答え
 ただし m とは j から 「message」 を JSON取得する
 ただし 発言 とは 役 は （m から 「role」 を Ollama文字値取得する） で 内容 は （m から 「content」 を Ollama文字値取得する） で 考え は （m から 「thinking」 を Ollama文字値取得する） で 道具呼出群 は （m から 「tool_calls」 を JSON取得して 要素群にする） で 道具名 は 「」 の Ollama発言
 
