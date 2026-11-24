@@ -1,0 +1,147 @@
+# 試験のための偽の Ollama(本物の LLM の代わりに、決まった答えを返す)
+#   口番 を 偽Ollama開始する   … その口番で待ち受けるスレッドを始めて、少し待つ(試験が終わればプロセスごと終わる)
+# 答えるもの:
+#   GET  /api/version    … {"version":"0.0.0-偽"}
+#   GET  /api/tags       … モデル「偽」(7.6B・Q4_K_M)と「偽-考える」(494M)
+#   POST /api/show       … 「偽」は能力 completion・tools と文脈の長さ 8192、「古い」は capabilities なし、ほかは 404
+#   POST /api/chat       … 最後の発言に「おうむ返し: 」を付けて返す。モデルが「偽」「偽-考える」「途中誤り」でなければ 404。
+#                          流すときは1文字ずつ。「偽-考える」なら先に thinking を流す。「途中誤り」は1文字のあとに {"error":…} を流す。
+#                          道具(tools)が届いて、最後の発言が「道具」を含むなら、run を呼ぶ tool_calls を返す。
+#                          format が届いたら、答えを {"format":届いた format} にする。options が届いたら、答えの終わりに「 [options …]」を付ける。
+#                          done の行は eval_count 3・eval_duration 1.5 秒・prompt_eval_count は届いた発言の数
+#   POST /api/web_search … Authorization が「Bearer 試し鍵」なら、問いを題に入れた件数ぶんの結果。違えば 401
+「標準」 を 読み込んで 使う
+「JSON」 を 読み込んで 使う
+「スレッド」 を 読み込む
+「時間」 を 読み込む
+「HTTP」 を 読み込む
+
+JSON から 文字列 を 文字値取得する は 文字列
+v から 名前 を 文字値取得する とは v から 名前 を JSON取得して 文字値にする
+
+JSON を 文字値にする は 文字列
+（s という JSON文字列） を 文字値にする とは s
+v を 文字値にする とは 「」
+
+JSON を 要素群にする は JSON の リスト
+（群 という JSON配列） を 要素群にする とは 群
+v を 要素群にする とは 空
+
+（JSON と 文字列） の 成否 を 解析値にする は JSON
+（v という 成功） を 解析値にする とは v
+（e という 失敗） を 解析値にする とは JSON無
+
+文字列 を JSON本文応答する は HTTP内の応答
+本文 を JSON本文応答する とは
+  状態 は 200 で 見出し は （（「Content-Type」 と 「application/json; charset=utf-8」） を 空 に 挿入する） で 本文 は （本文 を バイト列にする） の HTTP内の応答
+
+数 で 文字列 を JSON状態応答する は HTTP内の応答
+状態 で 本文 を JSON状態応答する とは 状態 は 状態 の （本文 を JSON本文応答する）
+
+文字列 を 未発見にする は HTTP内の応答
+名 を 未発見にする とは 404 で （「{"error":"model '」 + 名 + 「' not found"}」） を JSON状態応答する
+
+# --- /api/show・/api/web_search ---
+
+文字列 を 詳細応答する は HTTP内の応答
+本文 を 詳細応答する とは
+  もし 名 = 「偽」 ならば 「{"license":"x","capabilities":["completion","tools"],"model_info":{"general.architecture":"llama","general.parameter_count":7600000000,"llama.context_length":8192}}」 を JSON本文応答する
+  そうでなければ もし 名 = 「古い」 ならば 「{"model_info":{"general.architecture":"qwen2"}}」 を JSON本文応答する
+  そうでなければ 名 を 未発見にする
+ただし 名 とは （（本文 を JSON解析する） を 解析値にする） から 「model」 を 文字値取得する
+
+数 を 文字列 で 結果項目にする は JSON
+i を 問 で 結果項目にする とは （（「title」 と （（問 + 「 の結果 」 + （i を 文字列化する）） の JSON文字列） の JSON項目） と （「url」 と （（「https://example.com/」 + （i を 文字列化する）） の JSON文字列） の JSON項目） と （「content」 と （「中身」 の JSON文字列） の JSON項目）） の JSON物
+
+HTTP内の要求 を 検索応答する は HTTP内の応答
+問い を 検索応答する とは
+  もし （問い から 「authorization」 を HTTP内の見出し値にする） ≠ 「Bearer 試し鍵」 ならば 401 で 「{"error":"unauthorized"}」 を JSON状態応答する
+  そうでなければ （（「results」 と （（（1 から 件数 を 範囲にする） の それぞれ を 問 で 結果項目にする） の JSON配列） の JSON項目） を 空 に 挿入する） の JSON物 を JSON文字列にして JSON本文応答する
+ただし j とは （問い の 本文 を JSON解析する） を 解析値にする
+ただし 問 とは j から 「query」 を 文字値取得する
+ただし 件数 とは （j から 「max_results」 を JSON取得する） を 件数値にする
+
+JSON を 件数値にする は 数
+（n という JSON数） を 件数値にする とは n
+v を 件数値にする とは 5
+
+# --- /api/chat ---
+
+# 答えの文(道具の呼び出しがあれば、その行も)
+JSON を 答え文にする は 文字列
+j を 答え文にする とは
+  もし （j から 「format」 を JSON取得する） ≠ JSON無 ならば （（「format」 と （j から 「format」 を JSON取得する） の JSON項目） を 空 に 挿入する） の JSON物 を JSON文字列にする
+  そうでなければ 「おうむ返し: 」 + 最後 + 選択
+ただし 群 とは j から 「messages」 を JSON取得して 要素群にする
+ただし 最後 とは もし 群 の 長さ = 0 ならば 「」 そうでなければ 群 の 最後 から 「content」 を 文字値取得する
+ただし 選択 とは もし （j から 「options」 を JSON取得する） = JSON無 ならば 「」 そうでなければ 「 [options 」 + （（j から 「options」 を JSON取得する） を JSON文字列にする） + 「]」
+
+JSON が 道具要求である は 真偽
+j が 道具要求である とは （（j から 「tools」 を JSON取得して 要素群にする） の 長さ > 0） かつ 最後 が 「道具」 を 含有である
+ただし 群 とは j から 「messages」 を JSON取得して 要素群にする
+ただし 最後 とは もし 群 の 長さ = 0 ならば 「」 そうでなければ 群 の 最後 から 「content」 を 文字値取得する
+
+道具呼出群 とは 「[{"function":{"name":"run","arguments":{"command":"ls"}}}]」
+
+JSON を 完了行にする は 文字列
+j を 完了行にする とは 「{"model":"偽","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","eval_count":3,"eval_duration":1500000000,"prompt_eval_count":」 + （（（j から 「messages」 を JSON取得して 要素群にする） の 長さ） を 文字列化する） + 「}」
+
+文字列 で 文字列 を 内容行にする は 文字列
+名 で 文 を 内容行にする とは 「{"model":"偽","message":{"role":"assistant","content":"","」 + 名 + 「":」 + （文 の JSON文字列 を JSON文字列にする） + 「},"done":false}」
+
+# 流さない答え
+JSON を 一括答えにする は 文字列
+j を 一括答えにする とは
+  「{"model":"偽","message":{"role":"assistant","content":」 + （（j を 答え文にする） の JSON文字列 を JSON文字列にする） + 呼出 + 考え + 「},"done":true,"eval_count":3,"eval_duration":1500000000,"prompt_eval_count":」 + （（（j から 「messages」 を JSON取得して 要素群にする） の 長さ） を 文字列化する） + 「}」
+ただし 呼出 とは もし j が 道具要求である ならば 「,"tool_calls":」 + 道具呼出群 そうでなければ 「」
+ただし 考え とは もし （j から 「model」 を 文字値取得する） = 「偽-考える」 ならば 「,"thinking":"ふむ"」 そうでなければ 「」
+
+文字列 の リスト を 数 へ 流出する は 数 の 動作
+空 を 接続 へ 流出する とは 0 を 結果にする
+（先頭 は c で 残り は 他） を 接続 へ 流出する とは 手順
+  （（「content」 で c を 内容行にする） + 改行） を 接続 へ HTTP内の逐次送信する
+  他 を 接続 へ 流出する
+
+JSON を 数 へ 流し答えする は 数 の 動作
+j を 接続 へ 流し答えする とは 手順
+  接続 へ 「application/x-ndjson」 で HTTP内の逐次開始する
+  もし （j から 「model」 を 文字値取得する） = 「偽-考える」 ならば （（「thinking」 で 「ふむ」 を 内容行にする） + 改行） を 接続 へ HTTP内の逐次送信する そうでなければ 0 を 結果にする
+  もし （j から 「model」 を 文字値取得する） = 「途中誤り」 ならば 接続 へ 途中誤り流しする そうでなければ j を 接続 へ 通常流しする
+  接続 へ HTTP内の逐次終了する
+
+JSON を 数 へ 通常流しする は 数 の 動作
+j を 接続 へ 通常流しする とは 手順
+  （（j を 答え文にする） を 文字分解する） を 接続 へ 流出する
+  もし j が 道具要求である ならば （「{"model":"偽","message":{"role":"assistant","content":"","tool_calls":」 + 道具呼出群 + 「},"done":false}」 + 改行） を 接続 へ HTTP内の逐次送信する そうでなければ 0 を 結果にする
+  （（j を 完了行にする） + 改行） を 接続 へ HTTP内の逐次送信する
+
+数 へ 途中誤り流しする は 数 の 動作
+接続 へ 途中誤り流しする とは 手順
+  （「content」 で 「あ」 を 内容行にする） + 改行 を 接続 へ HTTP内の逐次送信する
+  「{"error":"途中で失敗しました"}」 + 改行 を 接続 へ HTTP内の逐次送信する
+
+HTTP内の要求 を 数 で 会話応答する は 数 の 動作
+問い を 接続 で 会話応答する とは
+  もし モデル ≠ 「偽」 かつ モデル ≠ 「偽-考える」 かつ モデル ≠ 「途中誤り」 ならば （モデル を 未発見にする） を 接続 へ 「POST」 で HTTP内の応答送信する
+  そうでなければ もし （j から 「stream」 を JSON取得する） = （偽 の JSON真偽） ならば （（j を 一括答えにする） を JSON本文応答する） を 接続 へ 「POST」 で HTTP内の応答送信する
+  そうでなければ j を 接続 へ 流し答えする
+ただし j とは （問い の 本文 を JSON解析する） を 解析値にする
+ただし モデル とは j から 「model」 を 文字値取得する
+
+# --- 振り分け ---
+
+HTTP内の要求 を 数 で 案内する は 数 の 動作
+問い を 接続 で 案内する とは
+  もし 道 = 「/api/chat」 ならば 問い を 接続 で 会話応答する
+  そうでなければ もし 道 = 「/api/version」 ならば （「{"version":"0.0.0-偽"}」 を JSON本文応答する） を 接続 へ 問い の 方法 で HTTP内の応答送信する
+  そうでなければ もし 道 = 「/api/tags」 ならば （「{"models":[{"name":"偽","model":"偽","size":4700000000,"digest":"d1","details":{"family":"llama","parameter_size":"7.6B","quantization_level":"Q4_K_M"}},{"name":"偽-考える","size":400000000,"digest":"d2","details":{"family":"qwen3","parameter_size":"494M","quantization_level":"Q8_0"}}]}」 を JSON本文応答する） を 接続 へ 問い の 方法 で HTTP内の応答送信する
+  そうでなければ もし 道 = 「/api/show」 ならば （問い の 本文 を 詳細応答する） を 接続 へ 問い の 方法 で HTTP内の応答送信する
+  そうでなければ もし 道 = 「/api/web_search」 ならば （問い を 検索応答する） を 接続 へ 問い の 方法 で HTTP内の応答送信する
+  そうでなければ （404 で 「404 page not found」 を HTTP内の状態応答する） を 接続 へ 問い の 方法 で HTTP内の応答送信する
+ただし 道 とは 問い の 道
+
+数 を 偽Ollama開始する は 数 の 動作
+口番 を 偽Ollama開始する とは 手順
+  （口番 を 案内すること で HTTP内の直接並行待受する） を スレッド内の並行開始する
+  0.3 を 時間内の待機する
+  0 を 結果にする

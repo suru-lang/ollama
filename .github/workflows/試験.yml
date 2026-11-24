@@ -1,0 +1,47 @@
+# kumu 試験 と kumu 点検 を、Linux と macOS で動かします。
+# 試験は、試験/偽Ollama.suru の偽の Ollama を相手にします(本物の Ollama には聞きません)。
+name: 試験
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: clang と OpenSSL を入れる(Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang libssl-dev
+      - name: OpenSSL の pkg-config を探せるようにする(macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew list openssl@3 > /dev/null 2>&1 || brew install openssl@3
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: kumu と suruc を入れる
+        # @main は Go のモジュールのプロキシが少し前の main を覚えていることがあるので、GitHub から直接取る
+        env:
+          GOPROXY: direct
+        run: |
+          go install github.com/suru-lang/suru/cmd/kumu@main
+          go install github.com/suru-lang/suru/cmd/suruc@main
+      - name: 試験
+        run: ~/go/bin/kumu 試験
+      - name: 点検
+        run: ~/go/bin/kumu 点検
+      - name: 例を作る
+        run: |
+          mkdir -p 出力
+          ~/go/bin/suruc 例/一問.suru -o 出力/一問
