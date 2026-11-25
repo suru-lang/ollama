@@ -13,6 +13,7 @@
 #   発言と依頼:
 #   役 で 内容 を Ollama発言にする              … 発言(役は system・user・assistant・tool)
 #   名 で 返答 を Ollama道具返答にする           … 道具の結果を返す発言(役 tool、道具名 名)
+#   発言 に 画像群 を Ollama画像追加する         … 画像(base64 の文字列)を足した発言(見えるモデルのとき)
 #   モデル で 発言群 を Ollama依頼にする         … 依頼(道具なし・options なし・format なし・think なし)
 #   依頼 に 名 を 値 で Ollama選択追加する       … options に1つ足した依頼(温度なら 「temperature」 を （0.5 の JSON数） で)
 #   名 で 説明 を 形 から Ollama道具定義にする   … tools に入れる道具の定義(形は引数の JSON スキーマ)
@@ -45,7 +46,8 @@
 Ollama窓口 とは 基点 と 鍵 の 組
 
 # 道具呼出群 は tool_calls の中身(JSON のリスト)。道具名 は 役が tool のときの道具の名前(ほかは「」)
-Ollama発言 とは 役 と 内容 と 考え と 道具呼出群 と 道具名 の 組
+# 画像群 は images の中身(画像のファイルの base64 の文字列のリスト。見えるモデルが読む)
+Ollama発言 とは 役 と 内容 と 考え と 道具呼出群 と 道具名 と 画像群 の 組
 
 # 選択群 は options の項目、形式 は format(JSON無 なら付けない)、考える は think(JSON無 なら付けない)
 Ollama依頼 とは モデル と 発言群 と 道具群 と 選択群 と 形式 と 考える の 組
@@ -122,10 +124,13 @@ s を 文字JSONにする とは s の JSON文字列
 # --- 発言と依頼 ---
 
 文字列 で 文字列 を Ollama発言にする は Ollama発言
-役 で 内容 を Ollama発言にする とは 役 は 役 で 内容 は 内容 で 考え は 「」 で 道具呼出群 は 空 で 道具名 は 「」 の Ollama発言
+役 で 内容 を Ollama発言にする とは 役 は 役 で 内容 は 内容 で 考え は 「」 で 道具呼出群 は 空 で 道具名 は 「」 で 画像群 は 空 の Ollama発言
 
 文字列 で 文字列 を Ollama道具返答にする は Ollama発言
 名 で 返答 を Ollama道具返答にする とは 道具名 は 名 の （「tool」 で 返答 を Ollama発言にする）
+
+Ollama発言 に 文字列 の リスト を Ollama画像追加する は Ollama発言
+m に 群 を Ollama画像追加する とは 画像群 は （m の 画像群 + 群） の m
 
 文字列 で Ollama発言 の リスト を Ollama依頼にする は Ollama依頼
 モデル で 発言群 を Ollama依頼にする とは モデル は モデル で 発言群 は 発言群 で 道具群 は 空 で 選択群 は 空 で 形式 は JSON無 で 考える は JSON無 の Ollama依頼
@@ -144,12 +149,13 @@ JSON を Ollama道具名取得する は 文字列
 JSON を Ollama道具引数取得する は JSON
 呼出 を Ollama道具引数取得する とは （呼出 から 「function」 を JSON取得する） から 「arguments」 を JSON取得する
 
-# 考え・道具呼出群・道具名 は、あるときだけ付ける
+# 考え・道具呼出群・道具名・画像群 は、あるときだけ付ける
 Ollama発言 を Ollama発言JSONにする は JSON
-m を Ollama発言JSONにする とは （（「role」 と （m の 役 の JSON文字列） の JSON項目） と （「content」 と （m の 内容 の JSON文字列） の JSON項目）） + 考え + 呼出 + 名 の JSON物
+m を Ollama発言JSONにする とは （（「role」 と （m の 役 の JSON文字列） の JSON項目） と （「content」 と （m の 内容 の JSON文字列） の JSON項目）） + 考え + 呼出 + 名 + 絵 の JSON物
 ただし 考え とは もし m の 考え = 「」 ならば 空 そうでなければ （「thinking」 と （m の 考え の JSON文字列） の JSON項目） を 空 に 挿入する
 ただし 呼出 とは もし m の 道具呼出群 の 長さ = 0 ならば 空 そうでなければ （「tool_calls」 と （m の 道具呼出群 の JSON配列） の JSON項目） を 空 に 挿入する
 ただし 名 とは もし m の 道具名 = 「」 ならば 空 そうでなければ （「tool_name」 と （m の 道具名 の JSON文字列） の JSON項目） を 空 に 挿入する
+ただし 絵 とは もし m の 画像群 の 長さ = 0 ならば 空 そうでなければ （「images」 と （（m の 画像群 の それぞれ を 文字JSONにする） の JSON配列） の JSON項目） を 空 に 挿入する
 
 # 道具群・選択群・形式・考える は、あるときだけ付ける
 Ollama依頼 を 真偽 で Ollama要求本文にする は 文字列
@@ -184,7 +190,7 @@ j を 完了読取する とは 語数 は （j から 「eval_count」 を Olla
 JSON を 答え読取する は Ollama答え
 j を 答え読取する とは 答発言 は 発言 で 語数 は （j から 「eval_count」 を Ollama数値取得する） で 秒 は （j から 「eval_duration」 を Ollama数値取得する） / 1000000000 で 送語数 は （j から 「prompt_eval_count」 を Ollama数値取得する） の Ollama答え
 ただし m とは j から 「message」 を JSON取得する
-ただし 発言 とは 役 は （m から 「role」 を Ollama文字値取得する） で 内容 は （m から 「content」 を Ollama文字値取得する） で 考え は （m から 「thinking」 を Ollama文字値取得する） で 道具呼出群 は （m から 「tool_calls」 を JSON取得して 要素群にする） で 道具名 は 「」 の Ollama発言
+ただし 発言 とは 役 は （m から 「role」 を Ollama文字値取得する） で 内容 は （m から 「content」 を Ollama文字値取得する） で 考え は （m から 「thinking」 を Ollama文字値取得する） で 道具呼出群 は （m から 「tool_calls」 を JSON取得して 要素群にする） で 道具名 は 「」 で 画像群 は 空 の Ollama発言
 
 # --- 送る ---
 

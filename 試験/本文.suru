@@ -47,6 +47,9 @@ x を 通知文にする とは 「無言」
   （呼出 の 先頭 を Ollama道具名取得する） を 「run」 に 一致確認する
   （（呼出 の 先頭 を Ollama道具引数取得する） から 「command」 を Ollama文字値取得する） を 「ls」 に 一致確認する
   （（「{"a":3}」 を JSON読取した 結果） から 「a」 を Ollama数値取得する） を 3 に 一致確認する
+  # 画像は images に base64 の文字列で入れる
+  絵 とは （「user」 で 「何が写っていますか」 を Ollama発言にする） に （「iVBORw0KGgo=」 と 「/9j/4AAQ」） を Ollama画像追加する
+  （絵 を Ollama発言JSONにして JSON文字列にする） を 「{"role":"user","content":"何が写っていますか","images":["iVBORw0KGgo=","/9j/4AAQ"]}」 に 一致確認する
 
 JSON を 要素群にする は JSON の リスト
 （群 という JSON配列） を 要素群にする とは 群
